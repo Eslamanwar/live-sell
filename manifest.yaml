@@ -1,0 +1,83 @@
+# Agent Manifest Configuration
+# ---------------------------
+# This file defines how the LiveShop agent should be built and deployed.
+
+# Build Configuration
+# ------------------
+build:
+  context:
+    root: ../../../
+    include_paths:
+      - agents/live-shop
+    dockerfile: agents/live-shop/Dockerfile
+    dockerignore: agents/live-shop/.dockerignore
+
+# Local Development Configuration
+# -----------------------------
+local_development:
+  agent:
+    port: 443
+    host_address: host.docker.internal
+
+  paths:
+    acp: project/acp.py
+    worker: project/run_worker.py
+
+# Agent Configuration
+# -----------------
+agent:
+  acp_type: async
+  name: live-shop-agent
+  description: AI-powered live commerce agent using Gemini Live API for real-time product detection, inventory queries, and one-click purchases
+
+  temporal:
+    enabled: true
+    workflows:
+      - name: LiveShopWorkflow
+        queue_name: live-shop-queue
+
+  env:
+    ENVIRONMENT: qa
+    UVICORN_PORT: "443"
+    DATABASE_URL: postgresql://localhost:5432
+    TEMPORAL_ADDRESS: localhost:7233
+    REDIS_URL: redis://localhost:6379
+    MONGODB_URI: mongodb://localhost:27017
+    MONGODB_DATABASE_NAME: agentex
+    WATCHFILES_FORCE_POLLING: "true"
+    ENABLE_HEALTH_CHECK_WORKFLOW: "true"
+    AGENTEX_SERVER_TASK_QUEUE: agentex-server-queue
+    AGENTEX_BASE_URL: "http://localhost:5003"
+    GEMINI_MODEL: "gemini-2.0-flash"
+    GEMINI_LIVE_MODEL: "gemini-2.0-flash-live"
+    FIRESTORE_DATABASE: "(default)"
+    WEBSOCKET_PORT: "8001"
+    INGEST_PORT: "8002"
+
+  credentials:
+    - env_var_name: "GEMINI_API_KEY"
+      secret_name: "live-shop-secrets"
+      secret_key: "gemini-api-key"
+    # Firestore auth uses the attached Cloud Run service account (ADC) — no key needed
+
+# Deployment Configuration
+# -----------------------
+deployment:
+  image:
+    repository: "sre/agents"
+    tag: "latest"
+
+  global:
+    agent:
+      name: "live-shop-agent"
+      description: "AI-powered live commerce agent using Gemini Live API"
+
+    replicaCount: 1
+
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"

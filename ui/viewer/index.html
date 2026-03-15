@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveShop — Live Shopping Stream</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: #111;
+            border-bottom: 1px solid #222;
+        }
+        .header .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ff4d6d;
+        }
+        .header .live-badge {
+            background: #ff0000;
+            color: #fff;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .header .viewer-count {
+            font-size: 13px;
+            color: #888;
+        }
+
+        /* Main content */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Stream area */
+        .stream-area {
+            position: relative;
+            flex: 1;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+        }
+        .stream-area video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .stream-placeholder {
+            color: #444;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        /* Floating product card */
+        .product-card {
+            position: absolute;
+            right: 16px;
+            top: 16px;
+            width: 260px;
+            background: rgba(17, 17, 17, 0.95);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 16px;
+            backdrop-filter: blur(10px);
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .product-card.visible { display: block; }
+        .product-card .product-name {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .product-card .product-price {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ff4d6d;
+            margin-bottom: 8px;
+        }
+        .product-card .product-colors {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .product-card .color-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #444;
+            cursor: pointer;
+        }
+        .product-card .color-dot.selected { border-color: #ff4d6d; }
+        .product-card .product-sizes {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .product-card .size-btn {
+            padding: 4px 10px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: transparent;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .product-card .size-btn.selected {
+            border-color: #ff4d6d;
+            background: rgba(255, 77, 109, 0.2);
+        }
+        .product-card .stock-badge {
+            font-size: 12px;
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+        .product-card .stock-badge.in-stock { color: #34d399; }
+        .product-card .stock-badge.low-stock { color: #fbbf24; }
+        .product-card .stock-badge.out-of-stock { color: #ef4444; }
+        .product-card .buy-btn {
+            width: 100%;
+            padding: 10px;
+            background: #ff4d6d;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .product-card .buy-btn:hover { background: #e8435d; }
+        .product-card .buy-btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+
+        /* Chat area */
+        .chat-area {
+            height: 240px;
+            border-top: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            background: #111;
+        }
+        .chat-header {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #888;
+            border-bottom: 1px solid #1a1a1a;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 16px;
+        }
+        .chat-message {
+            margin-bottom: 6px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .chat-message .author {
+            font-weight: 600;
+            margin-right: 6px;
+        }
+        .chat-message .author.user { color: #60a5fa; }
+        .chat-message .author.ai { color: #ff4d6d; }
+        .chat-message .content { color: #ccc; }
+        .chat-input-area {
+            display: flex;
+            padding: 8px 16px;
+            gap: 8px;
+            border-top: 1px solid #1a1a1a;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+        }
+        .chat-input:focus { border-color: #ff4d6d; }
+        .chat-send-btn {
+            padding: 8px 16px;
+            background: #ff4d6d;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .chat-send-btn:hover { background: #e8435d; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span class="logo">🛍️ LiveShop</span>
+        <span class="live-badge">● LIVE</span>
+        <span class="viewer-count" id="viewerCount">0 watching</span>
+    </div>
+
+    <div class="main">
+        <div class="stream-area">
+            <div class="stream-placeholder" id="streamPlaceholder">
+                📸 Waiting for stream to start...
+            </div>
+            <video id="streamVideo" autoplay muted playsinline style="display:none;"></video>
+
+            <!-- Floating Product Card -->
+            <div class="product-card" id="productCard">
+                <div class="product-name" id="productName">—</div>
+                <div class="product-price" id="productPrice">—</div>
+                <div class="product-colors" id="productColors"></div>
+                <div class="product-sizes" id="productSizes"></div>
+                <div class="stock-badge" id="stockBadge">—</div>
+                <button class="buy-btn" id="buyBtn" onclick="handleBuy()">ADD TO CART</button>
+            </div>
+        </div>
+
+        <div class="chat-area">
+            <div class="chat-header">💬 LIVE CHAT</div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-area">
+                <input
+                    type="text"
+                    class="chat-input"
+                    id="chatInput"
+                    placeholder="Ask about the product..."
+                    onkeypress="if(event.key==='Enter') sendMessage()"
+                />
+                <button class="chat-send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="stream.js"></script>
+    <script src="product_card.js"></script>
+</body>
+</html>

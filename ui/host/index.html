@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveShop — Host Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: #111;
+            border-bottom: 1px solid #222;
+        }
+        .header .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ff4d6d;
+        }
+        .header .status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header .status-item {
+            font-size: 13px;
+            color: #888;
+        }
+        .header .status-item strong {
+            color: #fff;
+        }
+
+        .main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 0;
+            overflow: hidden;
+        }
+
+        /* Left: Camera preview */
+        .camera-section {
+            display: flex;
+            flex-direction: column;
+            background: #000;
+        }
+        .camera-preview {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .camera-preview video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .camera-placeholder {
+            color: #444;
+            text-align: center;
+        }
+        .camera-controls {
+            display: flex;
+            gap: 12px;
+            padding: 16px 24px;
+            background: #111;
+            border-top: 1px solid #222;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #ff4d6d;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #e8435d; }
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        .btn-secondary:hover { background: #444; }
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+
+        /* Right: Dashboard panel */
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            background: #111;
+            border-left: 1px solid #222;
+            overflow-y: auto;
+        }
+        .panel-section {
+            padding: 16px 20px;
+            border-bottom: 1px solid #1a1a1a;
+        }
+        .panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-card {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ff4d6d;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* Active product */
+        .active-product {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .active-product .product-name {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .active-product .product-sku {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .active-product .product-price {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ff4d6d;
+            margin-top: 4px;
+        }
+
+        /* Manual product selector */
+        .product-selector {
+            display: flex;
+            gap: 8px;
+        }
+        .product-selector select {
+            flex: 1;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        /* Recent orders */
+        .order-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1a1a1a;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+        .order-item .order-status {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .order-item .order-status.reserved {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+        .order-item .order-status.paid {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+        }
+
+        /* AI Detection log */
+        .detection-log {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .detection-item {
+            font-size: 12px;
+            color: #888;
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a1a;
+        }
+        .detection-item .timestamp {
+            color: #555;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span class="logo">🛍️ LiveShop — Host Dashboard</span>
+        <div class="status">
+            <span class="status-item">👁️ Viewers: <strong id="viewerCount">0</strong></span>
+            <span class="status-item">🛒 Reservations: <strong id="reservationCount">0</strong></span>
+            <span class="status-item" id="streamStatus">⚪ Offline</span>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="camera-section">
+            <div class="camera-preview">
+                <div class="camera-placeholder" id="cameraPlaceholder">
+                    📸 Click "Go Live" to start your camera
+                </div>
+                <video id="cameraVideo" autoplay muted playsinline style="display:none;"></video>
+            </div>
+            <div class="camera-controls">
+                <button class="btn btn-primary" id="goLiveBtn" onclick="toggleStream()">
+                    🔴 Go Live
+                </button>
+                <button class="btn btn-secondary" onclick="pinProduct()">
+                    📌 Pin Product
+                </button>
+                <button class="btn btn-danger" id="endStreamBtn" onclick="endStream()" style="display:none;">
+                    ⏹️ End Stream
+                </button>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <!-- Live Stats -->
+            <div class="panel-section">
+                <div class="panel-title">📊 Live Stats</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statViewers">0</div>
+                        <div class="stat-label">Active Viewers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statProducts">0</div>
+                        <div class="stat-label">Products Shown</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statReservations">0</div>
+                        <div class="stat-label">Reservations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statQuestions">0</div>
+                        <div class="stat-label">Questions</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Product -->
+            <div class="panel-section">
+                <div class="panel-title">🛍️ Active Product</div>
+                <div class="active-product" id="activeProduct">
+                    <div class="product-name">No product detected</div>
+                    <div class="product-sku">Hold up a product to auto-detect</div>
+                </div>
+                <div class="product-selector" style="margin-top: 8px;">
+                    <select id="manualProductSelect">
+                        <option value="">Manual override...</option>
+                        <option value="DR-4421">DR-4421 — Floral Wrap Dress</option>
+                        <option value="BG-7782">BG-7782 — Leather Crossbody Bag</option>
+                        <option value="SH-3310">SH-3310 — Strappy Block Heel Sandals</option>
+                        <option value="TP-5501">TP-5501 — Silk Blend Blouse</option>
+                        <option value="JW-9903">JW-9903 — Layered Gold Necklace Set</option>
+                        <option value="AC-2204">AC-2204 — Oversized Sunglasses</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="manualSelectProduct()">Set</button>
+                </div>
+            </div>
+
+            <!-- Recent Orders -->
+            <div class="panel-section">
+                <div class="panel-title">🛒 Recent Orders</div>
+                <div class="order-list" id="orderList">
+                    <div class="order-item" style="color: #555; justify-content: center;">
+                        No orders yet
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Detection Log -->
+            <div class="panel-section">
+                <div class="panel-title">🤖 AI Detection Log</div>
+                <div class="detection-log" id="detectionLog">
+                    <div class="detection-item" style="color: #555;">
+                        Waiting for stream to start...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

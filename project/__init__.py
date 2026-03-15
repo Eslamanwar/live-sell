@@ -1,0 +1,1 @@
+"""LiveShop Agent - AI-powered live commerce agent using Gemini Live API."""

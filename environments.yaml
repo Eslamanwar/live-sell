@@ -1,0 +1,30 @@
+# Agent Environment Configuration
+# ------------------------------
+# This file defines environment-specific settings for the LiveShop agent.
+
+schema_version: "v1"
+environments:
+  qa:
+    auth:
+      principal:
+        user_id: "cluster-user-id"
+        account_id: "cluster-account-id"
+    helm_overrides:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"
+      temporal-worker:
+        enabled: true
+        replicaCount: 1
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"

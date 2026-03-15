@@ -1,0 +1,1 @@
+"""Database layer for LiveShop — Firestore client and seed data."""
