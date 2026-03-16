@@ -272,3 +272,304 @@ helm install live-shop chart/live-shop/ -f chart/live-shop/values.yaml
 5. **Google ADK** — Agent orchestration with autonomous tool calling. Gemini decides when to call `check_stock` vs `search_inventory` based on the viewer's question.
 
 6. **No mocks** — All tools query real Firestore. All LLM calls go through real Gemini API. `GEMINI_API_KEY` is required.
+
+
+## User Flow — End to End
+
+Everything runs through the ACP server at `https://live-shop-acp.rilo.dev`. No separate ports or servers needed.
+
+### URLs
+
+| Page | URL |
+|------|-----|
+| Host Dashboard | `https://live-shop-acp.rilo.dev/host` |
+| Viewer Page | `https://live-shop-acp.rilo.dev/viewer?session={session_id}` |
+| Agentex Hub UI | `https://hub.rilo.dev` |
+
+---
+
+### Step 1: Create a Task (Start a Live Session)
+
+A task must be created first via the Agentex Hub or API. This initializes the Temporal workflow.
+
+**Option A — Via Agentex Hub UI:**
+1. Open `https://hub.rilo.dev`
+2. Select the **live-shop** agent
+3. Send a message: `start`
+4. Note the **task ID** from the URL or response
+
+**Option B — Via API:**
+```bash
+curl -X POST https://hub-api.rilo.dev/agents/live-shop/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "session_id": "stream-001",
+      "host_name": "Sara"
+    }
+  }'
+```
+
+The response returns a `task_id`. This becomes the `session_id` for the stream.
+
+---
+
+### Step 2: Host Goes Live
+
+1. Open the **Host Dashboard**: `https://live-shop-acp.rilo.dev/host`
+2. Click **"Go Live"** — the browser requests camera access
+3. Once granted, the browser:
+   - Shows a local camera preview
+   - Captures JPEG frames every 2 seconds via `canvas.toBlob()`
+   - Sends frames over WebSocket to `wss://live-shop-acp.rilo.dev/ws/ingest/{session_id}`
+4. The ACP server feeds each frame to **Gemini 2.0 Flash Live API**
+5. Gemini analyzes the frame and responds with product descriptions
+6. The Host Dashboard shows detection results in the **AI Detection Log** panel
+
+```
+Host Browser                          ACP Server (:8000)              Gemini Live API
+─────────────                         ──────────────────              ───────────────
+getUserMedia() → camera
+canvas.toBlob() every 2s
+  └── JPEG binary ──── WSS /ws/ingest/{session_id} ────►
+                                      GeminiLiveStreamProcessor
+                                        send_realtime_input(video=JPEG)──►
+                                                                      "PRODUCT: Red silk dress"
+                                      ◄── detection result ───────────
+  ◄── {type:"detection", ...} ────────
+Dashboard shows: "Product detected: Red silk dress"
+```
+
+The host can also **manually pin a product** using the dropdown selector on the dashboard, bypassing auto-detection.
+
+---
+
+### Step 3: Viewers Join the Stream
+
+1. Share the viewer link: `https://live-shop-acp.rilo.dev/viewer?session={session_id}`
+2. Viewers open the link in their browser
+3. The viewer page connects via WebSocket to `wss://live-shop-acp.rilo.dev/ws/viewer/{session_id}/{viewer_id}`
+4. Viewers receive:
+   - **Product card updates** — floating card with name, price, colors, sizes, stock
+   - **Stock updates** — real-time badge changes (In Stock → Low Stock → Out of Stock)
+   - **Chat responses** — AI answers to their questions
+
+---
+
+### Step 4: AI Product Detection → Inventory Lookup → Product Card Push
+
+When Gemini detects a product, the Temporal workflow transitions through these states:
+
+```
+WAITING_FOR_STREAM
+       │ (host sends "start" or clicks Go Live)
+       ▼
+INGESTING_STREAM
+       │ (Gemini detects: "PRODUCT: Red silk dress")
+       ▼
+QUERYING_INVENTORY
+       │ search_inventory(visual_description) → Firestore
+       │ check_stock(sku) → Firestore
+       │ Returns: {sku, name, price, variants, stock}
+       ▼
+DISPLAYING_PRODUCT
+       │ push_product_card() → WebSocket broadcast to all viewers
+       │ Viewers see: floating product card with buy button
+       ▼
+INGESTING_STREAM  (loops back, waiting for next product)
+```
+
+---
+
+### Step 5: Viewer Asks a Question (Chat)
+
+1. Viewer types a question in the chat input, e.g. "Does this come in blue?"
+2. Message flows:
+
+```
+Viewer Browser                        ACP Server                      Temporal Workflow
+──────────────                        ──────────                      ─────────────────
+{type:"chat", content:"..."}
+  └── WSS /ws/viewer/{sid}/{vid} ──►
+                                      POST /tasks/{task_id}/send_event
+                                        └── Temporal signal ──────────►
+                                                                      on_task_event_send()
+                                                                      state → HANDLING_CHAT
+                                                                      Gemini ADK agent:
+                                                                        - check_inventory tool
+                                                                        - answer with product info
+                                                                      ◄── response ────────────
+                                      ◄── broadcast to viewers ───────
+  ◄── {type:"chat_response", ...} ──
+Viewer sees: "Yes! Available in Royal Blue, Navy, and Sky Blue."
+```
+
+---
+
+### Step 6: Viewer Clicks "Buy"
+
+1. Viewer selects color + size on the product card and clicks **"ADD TO CART"**
+2. Purchase flow:
+
+```
+Viewer Browser                        ACP Server                      Temporal Workflow
+──────────────                        ──────────                      ─────────────────
+{type:"buy", sku:"DR-4421",
+ color:"Red", size:"M"}
+  └── WSS /ws/viewer/{sid}/{vid} ──►
+                                      POST /tasks/{task_id}/send_event
+                                        content: "I want to buy DR-4421 in Red, size M"
+                                        └── Temporal signal ──────────►
+                                                                      on_task_event_send()
+                                                                      state → PROCESSING_PURCHASE
+                                                                      reserve_item() activity:
+                                                                        Firestore atomic transaction:
+                                                                        - Decrement stock for DR-4421/Red/M
+                                                                        - Create reservation doc in /orders
+                                                                        - Set 15-min expiry TTL
+                                                                      ◄── reservation result ──
+                                      ◄── private message ────────────
+  ◄── {type:"private_message",
+       checkout_url:"..."} ──────────
+Viewer sees: "Item reserved! Complete your purchase: <checkout_url>"
+Button shows: "RESERVING..." → "ADD TO CART" (re-enabled after 5s)
+```
+
+Stock is decremented atomically in Firestore. Other viewers see a real-time stock update:
+```
+"12 in stock" → "11 in stock" → "Only 3 left!" → "Out of stock"
+```
+
+---
+
+### Step 7: Host Ends Stream
+
+1. Host clicks **"End Stream"** on the dashboard
+2. Browser sends `{type: "stop"}` over the ingest WebSocket
+3. Gemini Live session closes
+4. Workflow transitions to `COMPLETED`
+5. All viewers receive `{type: "stream_ended"}`
+6. Viewer pages show: "The live stream has ended. Thanks for watching!"
+
+---
+
+### Full Architecture Diagram
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│  Host Browser                                                             │
+│  ┌─────────────────────────────────┐                                      │
+│  │  /host — Host Dashboard          │                                      │
+│  │  ├── Camera preview (getUserMedia)│                                      │
+│  │  ├── Go Live / End Stream buttons │                                      │
+│  │  ├── AI Detection Log             │                                      │
+│  │  ├── Live Stats (viewers, orders) │                                      │
+│  │  └── Manual product selector      │                                      │
+│  └───────────────┬───────────────────┘                                      │
+│                  │ WSS /ws/ingest/{session_id}                              │
+│                  │ JPEG frames every 2s                                     │
+│                  ▼                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐      │
+│  │  ACP Server (FastAPI :8000) — live-shop-acp.rilo.dev             │      │
+│  │  ├── /host              → Host Dashboard HTML                     │      │
+│  │  ├── /viewer            → Viewer Page HTML                        │      │
+│  │  ├── /ws/ingest/{sid}   → Gemini Live API (product detection)     │      │
+│  │  ├── /ws/viewer/{sid}/{vid} → Viewer WebSocket (cards, chat, buy) │      │
+│  │  ├── /ws/push           → Internal push (agent → viewers)         │      │
+│  │  ├── /tasks             → Agentex ACP (create/signal workflows)   │      │
+│  │  └── /healthz           → Health check                            │      │
+│  └──────────────────────────────┬───────────────────────────────────┘      │
+│                K8s (Rilo)       │ Temporal gRPC                            │
+└─────────────────────────────────┼─────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────┼─────────────────────────────────────────┐
+│             Google Cloud        │                                          │
+│                                 ▼                                          │
+│  ┌──────────────────────────────────────────┐                             │
+│  │  Cloud Run — Temporal Worker              │                             │
+│  │  ├── LiveShopWorkflow (8-state machine)   │                             │
+│  │  │   ├── WAITING_FOR_STREAM               │                             │
+│  │  │   ├── INGESTING_STREAM                 │                             │
+│  │  │   ├── QUERYING_INVENTORY               │                             │
+│  │  │   ├── DISPLAYING_PRODUCT               │                             │
+│  │  │   ├── HANDLING_CHAT                    │                             │
+│  │  │   ├── PROCESSING_PURCHASE              │                             │
+│  │  │   ├── COMPLETED                        │                             │
+│  │  │   └── FAILED                           │                             │
+│  │  ├── Activities (Gemini ADK agent)        │                             │
+│  │  │   ├── search_inventory()               │                             │
+│  │  │   ├── check_stock()                    │                             │
+│  │  │   ├── reserve_item()                   │                             │
+│  │  │   ├── answer_chat()                    │                             │
+│  │  │   └── push_product_card()              │                             │
+│  │  └── Registered: hub-api.rilo.dev         │                             │
+│  └──────────┬──────────┬──────────┬──────────┘                             │
+│             │          │          │                                         │
+│             ▼          ▼          ▼                                         │
+│  ┌──────────────┐ ┌─────────┐ ┌───────────┐                               │
+│  │  Firestore   │ │ Gemini  │ │  Secret   │                               │
+│  │  inventory   │ │ 2.0     │ │  Manager  │                               │
+│  │  orders      │ │ Flash   │ │  (API key)│                               │
+│  │  sessions    │ │ + Live  │ │           │                               │
+│  └──────────────┘ └─────────┘ └───────────┘                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  Viewer Browsers (multiple)                                               │
+│  ┌───────────────────────────────────┐                                    │
+│  │  /viewer?session={session_id}      │                                    │
+│  │  ├── LIVE badge + viewer count     │                                    │
+│  │  ├── Stream area (placeholder)     │                                    │
+│  │  ├── Floating product card         │                                    │
+│  │  │   ├── Product name + price      │                                    │
+│  │  │   ├── Color swatches            │                                    │
+│  │  │   ├── Size selector             │                                    │
+│  │  │   ├── Stock badge               │                                    │
+│  │  │   └── ADD TO CART button        │                                    │
+│  │  └── Live chat (ask + buy)         │                                    │
+│  └───────────────────────────────────┘                                    │
+│  Connected via: WSS /ws/viewer/{session_id}/{viewer_id}                   │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Quick Test Checklist
+
+```bash
+# 1. Verify ACP is healthy
+curl https://live-shop-acp.rilo.dev/healthz
+
+# 2. Verify Cloud Run worker is running
+gcloud run services logs read live-shop-worker --region=me-central1 --limit=5
+# Expected: "Running workers for task queue: live-shop-queue"
+
+# 3. Verify Agentex API is up
+curl https://hub-api.rilo.dev
+# Expected: {"detail":"Not Found"} (normal for root path)
+
+# 4. Create a task
+curl -X POST https://hub-api.rilo.dev/agents/live-shop/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"session_id": "test-001", "host_name": "Sara"}}'
+
+# 5. Open Host Dashboard
+# https://live-shop-acp.rilo.dev/host
+# Click "Go Live" → grant camera → frames should start sending
+
+# 6. Open Viewer Page (in another tab/device)
+# https://live-shop-acp.rilo.dev/viewer?session=test-001
+# Should see "Connected to LiveShop!" in chat
+
+# 7. Hold up a product to the camera
+# Host dashboard should show detection in AI log
+# Viewer should receive a floating product card
+
+# 8. Viewer types "What colors does this come in?" in chat
+# AI responds with inventory data from Firestore
+
+# 9. Viewer clicks "ADD TO CART"
+# Firestore stock decrements, viewer gets checkout URL
+```
+
+
