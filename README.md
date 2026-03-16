@@ -110,7 +110,7 @@ stateDiagram-v2
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Video Analysis** | Gemini 2.0 Flash Live (`gemini-2.5-flash-native-audio-preview-12-2025`) | Real-time video frame analysis via `google.genai` Live API |
+| **Video Analysis** | gemini-2.5-flash-native-audio-preview-12-2025 (`gemini-2.5-flash-native-audio-preview-12-2025`) | Real-time video frame analysis via `google.genai` Live API |
 | **Agent Orchestration** | Google ADK (`google-adk`) | Tool registration, autonomous tool calling, session management |
 | **Text Q&A + Tools** | Gemini 2.0 Flash (`gemini-2.0-flash`) | Answer viewer questions, call inventory/stock tools |
 | **Workflow Engine** | Temporal | Durable state machine with 8 states, signal handling |
