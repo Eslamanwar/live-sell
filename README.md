@@ -14,7 +14,7 @@ graph TB
 
     subgraph "Cloud Run / K8s"
         WS_INGEST -->|binary frames| INGEST[stream/ingest.py<br/>GeminiLiveStreamProcessor]
-        INGEST -->|send_realtime_input| GEMINI_LIVE[Gemini 2.0 Flash Live API<br/>gemini-2.0-flash-live]
+        INGEST -->|send_realtime_input| GEMINI_LIVE[gemini-2.5-flash-native-audio-preview-12-2025<br/>gemini-2.5-flash-native-audio-preview-12-2025]
         GEMINI_LIVE -->|product detection| INGEST
 
         ACP[project/acp.py<br/>FastACP Server :8000] -->|create_task| TEMPORAL[Temporal Workflow<br/>LiveShopWorkflow]
@@ -110,7 +110,7 @@ stateDiagram-v2
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Video Analysis** | Gemini 2.0 Flash Live (`gemini-2.0-flash-live`) | Real-time video frame analysis via `google.genai` Live API |
+| **Video Analysis** | Gemini 2.0 Flash Live (`gemini-2.5-flash-native-audio-preview-12-2025`) | Real-time video frame analysis via `google.genai` Live API |
 | **Agent Orchestration** | Google ADK (`google-adk`) | Tool registration, autonomous tool calling, session management |
 | **Text Q&A + Tools** | Gemini 2.0 Flash (`gemini-2.0-flash`) | Answer viewer questions, call inventory/stock tools |
 | **Workflow Engine** | Temporal | Durable state machine with 8 states, signal handling |
@@ -188,7 +188,7 @@ Uses a **Firestore transaction** to atomically:
 
 | Model | Used In | Purpose |
 |-------|---------|---------|
-| `gemini-2.0-flash-live` | `stream/ingest.py` | Real-time video streaming via Live API (`client.aio.live.connect()`) |
+| `gemini-2.5-flash-native-audio-preview-12-2025` | `stream/ingest.py` | Real-time video streaming via Live API (`client.aio.live.connect()`) |
 | `gemini-2.0-flash` | `project/agent.py` | Text Q&A + autonomous tool calling via ADK |
 
 The Live model only supports streaming video/audio input. The standard model supports tool calling. They are configured via separate env vars: `GEMINI_LIVE_MODEL` and `GEMINI_MODEL`.
@@ -232,7 +232,7 @@ python db/seed_inventory.py --dry-run
 ```bash
 export GEMINI_API_KEY=your-gemini-api-key
 export GEMINI_MODEL=gemini-2.0-flash
-export GEMINI_LIVE_MODEL=gemini-2.0-flash-live
+export GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
 export FIRESTORE_CREDS='{"type":"service_account",...}'
 export PROJECT_ID=your-gcp-project
 ```
